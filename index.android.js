@@ -1,28 +1,42 @@
+import {NativeModules, NativeEventEmitter} from 'react-native'
 
-import { NativeModules } from 'react-native'
-
-const { RNPassportReader } = NativeModules
+const {RNPassportReader} = NativeModules
 const DATE_REGEX = /^\d{6}$/
 
-module.exports = {
-  ...RNPassportReader,
-  scan
+function assert(statement, err) {
+    if (!statement) {
+        throw new Error(err || 'Assertion failed')
+    }
 }
 
-function scan ({ documentNumber, dateOfBirth, dateOfExpiry, quality=1 }) {
-  assert(typeof documentNumber === 'string', 'expected string "documentNumber"')
-  assert(isDate(dateOfBirth), 'expected string "dateOfBirth" in format "yyMMdd"')
-  assert(isDate(dateOfExpiry), 'expected string "dateOfExpiry" in format "yyMMdd"')
-  return RNPassportReader.scan({ documentNumber, dateOfBirth, dateOfExpiry, quality })
+function isDate(str) {
+    return typeof str === 'string' && DATE_REGEX.test(str)
+}
+
+class PassportReader extends NativeEventEmitter {
+    constructor() {
+        super(RNPassportReader);
+    }
+
+    scan({documentNumber, dateOfBirth, dateOfExpiry, quality = 1}) {
+        assert(typeof documentNumber === 'string', 'expected string "documentNumber"')
+        assert(isDate(dateOfBirth), 'expected string "dateOfBirth" in format "yyMMdd"')
+        assert(isDate(dateOfExpiry), 'expected string "dateOfExpiry" in format "yyMMdd"')
+        return RNPassportReader.scan({documentNumber, dateOfBirth, dateOfExpiry, quality})
+    }
+
+    openNFCSettings() {
+        return RNPassportReader.openNFCSettings()
+    }
+
+    addEventListener(type, handler) {
+        return this.addListener(type, handler);
+    }
+
+    removeEventListener(type, handler) {
+        this.removeListener(type, handler);
+    }
 }
 
 
-function assert (statement, err) {
-  if (!statement) {
-    throw new Error(err || 'Assertion failed')
-  }
-}
-
-function isDate (str) {
-  return typeof str === 'string' && DATE_REGEX.test(str)
-}
+export default new PassportReader();

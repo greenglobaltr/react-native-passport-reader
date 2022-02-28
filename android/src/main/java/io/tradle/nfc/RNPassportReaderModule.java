@@ -27,6 +27,7 @@ import android.nfc.tech.IsoDep;
 import android.os.AsyncTask;
 import android.util.Base64;
 import android.util.Log;
+import android.provider.Settings;
 
 import com.facebook.react.bridge.ActivityEventListener;
 import com.facebook.react.bridge.Arguments;
@@ -37,6 +38,8 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.bridge.WritableMap;
+import com.facebook.react.bridge.Promise;
+import com.facebook.react.modules.core.DeviceEventManagerModule.RCTDeviceEventEmitter;
 
 import net.sf.scuba.smartcards.CardFileInputStream;
 import net.sf.scuba.smartcards.CardService;
@@ -69,7 +72,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import javax.annotation.Nullable;
+
 public class RNPassportReaderModule extends ReactContextBaseJavaModule implements LifecycleEventListener, ActivityEventListener {
+
+  private static final String LISTENER_FAILED = "failed";
+  private static final String LISTENER_STARTED = "started";
+  private static final String LISTENER_CANCELED = "canceled";
+  private static final String LISTENER_SCANNING = "scanning";
+  private static final String LISTENER_FINISH = "finish";
 
   private static final int SCAN_REQUEST_CODE = 8735738;
   private static final String E_NOT_SUPPORTED = "E_NOT_SUPPORTED";
@@ -78,7 +89,7 @@ public class RNPassportReaderModule extends ReactContextBaseJavaModule implement
   private static final String E_SCAN_FAILED = "E_SCAN_FAILED";
   private static final String E_SCAN_FAILED_DISCONNECT = "E_SCAN_FAILED_DISCONNECT";
   private static final String E_ONE_REQ_AT_A_TIME = "E_ONE_REQ_AT_A_TIME";
-//  private static final String E_MISSING_REQUIRED_PARAM = "E_MISSING_REQUIRED_PARAM";
+  //  private static final String E_MISSING_REQUIRED_PARAM = "E_MISSING_REQUIRED_PARAM";
   private static final String KEY_IS_SUPPORTED = "isSupported";
   private static final String KEY_FIRST_NAME = "firstName";
   private static final String KEY_LAST_NAME = "lastName";
@@ -86,6 +97,7 @@ public class RNPassportReaderModule extends ReactContextBaseJavaModule implement
   private static final String KEY_ISSUER = "issuer";
   private static final String KEY_NATIONALITY = "nationality";
   private static final String KEY_PHOTO = "photo";
+  private static final String KEY_PERSONAL_NUMBER = "personalNumber";
   private static final String PARAM_DOC_NUM = "documentNumber";
   private static final String PARAM_DOB = "dateOfBirth";
   private static final String PARAM_DOE = "dateOfExpiry";
@@ -126,6 +138,22 @@ public class RNPassportReaderModule extends ReactContextBaseJavaModule implement
     new ReadTask(IsoDep.get(tag), bacKey).execute();
   }
 
+  @ReactMethod
+  public void openNFCSettings(Promise promise) {
+    try {
+      Activity currentActivity = getCurrentActivity();
+      if (currentActivity == null) {
+        promise.reject("Error","currentActivity is null.");
+        return;
+      }
+
+      currentActivity.startActivity(new Intent(Settings.ACTION_NFC_SETTINGS));
+      promise.resolve(null);
+    } catch(Exception e) {
+      promise.reject("Error", e);
+    }
+  }
+
   @Override
   public String getName() {
     return "RNPassportReader";
@@ -145,6 +173,7 @@ public class RNPassportReaderModule extends ReactContextBaseJavaModule implement
       scanPromise.reject(E_SCAN_CANCELED, "canceled");
     }
 
+    sendEvent(LISTENER_CANCELED);
     resetState();
     promise.resolve(null);
   }
@@ -154,18 +183,24 @@ public class RNPassportReaderModule extends ReactContextBaseJavaModule implement
     NfcAdapter mNfcAdapter = NfcAdapter.getDefaultAdapter(this.reactContext);
     if (mNfcAdapter == null) {
       promise.reject(E_NOT_SUPPORTED, "NFC chip reading not supported");
+      sendEvent(LISTENER_FAILED,"NFC chip reading not supported");
+
       return;
     }
 
     if (!mNfcAdapter.isEnabled()) {
       promise.reject(E_NOT_ENABLED, "NFC chip reading not enabled");
+      sendEvent(LISTENER_FAILED,"NFC chip reading not enabled");
       return;
     }
 
     if (scanPromise != null) {
       promise.reject(E_ONE_REQ_AT_A_TIME, "Already running a scan");
+      sendEvent(LISTENER_FAILED,"Already running a scan");
       return;
     }
+
+    sendEvent(LISTENER_STARTED);
 
     this.opts = opts;
     this.scanPromise = promise;
@@ -281,7 +316,7 @@ public class RNPassportReaderModule extends ReactContextBaseJavaModule implement
     @Override
     protected Exception doInBackground(Void... params) {
       try {
-
+        sendEvent(LISTENER_SCANNING);
         CardService cardService = CardService.getInstance(isoDep);
         cardService.open();
 
@@ -364,8 +399,10 @@ public class RNPassportReaderModule extends ReactContextBaseJavaModule implement
         Log.w(TAG, exceptionStack(result));
         if (result instanceof IOException) {
           scanPromise.reject(E_SCAN_FAILED_DISCONNECT, "Lost connection to chip on card");
+          sendEvent(LISTENER_FAILED, "Lost connection to chip on card");
         } else {
           scanPromise.reject(E_SCAN_FAILED, result);
+          sendEvent(LISTENER_FAILED, result.getMessage());
         }
 
         resetState();
@@ -385,18 +422,54 @@ public class RNPassportReaderModule extends ReactContextBaseJavaModule implement
       photo.putInt("width", bitmap.getWidth());
       photo.putInt("height", bitmap.getHeight());
 
-      String firstName = mrzInfo.getSecondaryIdentifier().replace("<", "");
-      String lastName = mrzInfo.getPrimaryIdentifier().replace("<", "");
+      String firstName = mrzInfo.getSecondaryIdentifier().replace("<", " ").trim();
+      String lastName = mrzInfo.getPrimaryIdentifier().replace("<", " ").trim();
       WritableMap passport = Arguments.createMap();
       passport.putMap(KEY_PHOTO, photo);
       passport.putString(KEY_FIRST_NAME, firstName);
       passport.putString(KEY_LAST_NAME, lastName);
       passport.putString(KEY_NATIONALITY, mrzInfo.getNationality());
+      passport.putString(KEY_PERSONAL_NUMBER, mrzInfo.getPersonalNumber());
       passport.putString(KEY_GENDER, mrzInfo.getGender().toString());
       passport.putString(KEY_ISSUER, mrzInfo.getIssuingState());
 
       scanPromise.resolve(passport);
+      sendEvent(LISTENER_FINISH);
       resetState();
     }
+  }
+
+  private void sendEvent(String eventName, String str) {
+    WritableMap params = Arguments.createMap();
+    params.putString("response", str);
+    sendEvent(eventName, params);
+  }
+
+  private void sendEvent(String eventName,@Nullable WritableMap params) {
+    ReactApplicationContext reactApplicationContext = getReactApplicationContext();
+    if (reactApplicationContext == null) {
+      return;
+    }
+    // We don't gain anything interesting from logging here, and it's an extremely common
+    // race condition for an AppState event to be triggered as the Catalyst instance is being
+    // set up or torn down. So, just fail silently here.
+    if (!reactApplicationContext.hasActiveCatalystInstance()) {
+      return;
+    }
+    reactApplicationContext.getJSModule(RCTDeviceEventEmitter.class).emit(eventName, params);
+  }
+
+  private void sendEvent(String eventName) {
+    ReactApplicationContext reactApplicationContext = getReactApplicationContext();
+    if (reactApplicationContext == null) {
+      return;
+    }
+    // We don't gain anything interesting from logging here, and it's an extremely common
+    // race condition for an AppState event to be triggered as the Catalyst instance is being
+    // set up or torn down. So, just fail silently here.
+    if (!reactApplicationContext.hasActiveCatalystInstance()) {
+      return;
+    }
+    reactApplicationContext.getJSModule(RCTDeviceEventEmitter.class).emit(eventName, null);
   }
 }
