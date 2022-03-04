@@ -39,4 +39,4 @@ class PassportReader extends NativeEventEmitter {
 }
 
 
-export default new PassportReader();
+module.exports = PassportReader;
