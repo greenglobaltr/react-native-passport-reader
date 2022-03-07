@@ -2,7 +2,7 @@
   "name": "react-native-passport-reader",
   "version": "1.0.3",
   "description": "read the NFC chip in a passport",
-  "main": "index.android.js",
+  "main": "index.js",
   "keywords": [
     "react-native",
     "react-component",
@@ -10,6 +10,6 @@
     "android",
     "scanner"
   ],
-  "author": "Mark Vayngrib <mark@tradle.io> (http://github.com/mvayngrib)",
+  "author": "Ahmet Çağlar Durmuş",
   "license": "APLv2"
 }

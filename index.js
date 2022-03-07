@@ -1,4 +1,4 @@
-import {NativeModules, NativeEventEmitter} from 'react-native'
+import {NativeModules, NativeEventEmitter, Platform} from 'react-native'
 
 const {RNPassportReader} = NativeModules
 const DATE_REGEX = /^\d{6}$/
@@ -38,5 +38,8 @@ class PassportReader extends NativeEventEmitter {
     }
 }
 
-
-module.exports = PassportReader;
+if (Platform.OS == "android") {
+    module.exports = PassportReader;
+}else {
+    module.exports = null;
+}
