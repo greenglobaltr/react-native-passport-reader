@@ -39,7 +39,7 @@ class PassportReader extends NativeEventEmitter {
 }
 
 if (Platform.OS == "android") {
-    module.exports = PassportReader;
+    module.exports = new PassportReader();
 }else {
     module.exports = null;
 }
