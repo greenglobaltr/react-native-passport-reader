@@ -215,16 +215,18 @@ public class RNPassportReaderModule extends ReactContextBaseJavaModule implement
   public void onHostDestroy() {
     resetState();
   }
-
-  @Override
+@Override
   public void onHostResume() {
     NfcAdapter mNfcAdapter = NfcAdapter.getDefaultAdapter(this.reactContext);
     if (mNfcAdapter == null) return;
-
+    int  flag = PendingIntent.FLAG_UPDATE_CURRENT;
+    if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M){
+      flag = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
+    }
     Activity activity = getCurrentActivity();
     Intent intent = new Intent(activity.getApplicationContext(), activity.getClass());
     intent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
-    PendingIntent pendingIntent = PendingIntent.getActivity(getCurrentActivity(), 0, intent, 0);//PendingIntent.FLAG_UPDATE_CURRENT);
+    PendingIntent pendingIntent = PendingIntent.getActivity(getCurrentActivity(), 0, intent, flag);//PendingIntent.FLAG_UPDATE_CURRENT);
     String[][] filter = new String[][] { new String[] { IsoDep.class.getName()  } };
     mNfcAdapter.enableForegroundDispatch(getCurrentActivity(), pendingIntent, null, filter);
   }
