@@ -373,7 +373,7 @@ public class RNPassportReaderModule extends ReactContextBaseJavaModule implement
         for (FaceInfo faceInfo : faceInfos) {
           allFaceImageInfos.addAll(faceInfo.getFaceImageInfos());
         }
-
+ //asd
         if (!allFaceImageInfos.isEmpty()) {
           FaceImageInfo faceImageInfo = allFaceImageInfos.iterator().next();
 
